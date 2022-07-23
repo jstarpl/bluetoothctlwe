@@ -39,7 +39,8 @@ exports.Bluetooth = function () {
         Connected: 'Connected',
         Paired: 'Paired',
         AlreadyScanning: 'AlreadyScanning',
-        PassKey: 'PassKey'
+        PassKey: 'PassKey',
+        EnterPIN: 'EnterPIN',
     }
     var mydata = "";
     var devices = [];
@@ -48,6 +49,7 @@ exports.Bluetooth = function () {
     var isBluetoothReady = false;
     var isScanning = false;
     var isConfirmingPassKey = false;
+    var isWaitingForPIN = false;
 
     Object.defineProperty(this, 'isBluetoothControlExists', {
         get: function () {
@@ -72,6 +74,14 @@ exports.Bluetooth = function () {
         },
         set: function (value) {
             isConfirmingPassKey = value;
+        }
+    });
+    Object.defineProperty(this, 'isWaitingForPIN', {
+        get: function () {
+            return isWaitingForPIN;
+        },
+        set: function (value) {
+            isWaitingForPIN = value;
         }
     });
     Object.defineProperty(this, 'isBluetoothReady', {
@@ -156,7 +166,8 @@ exports.Bluetooth = function () {
         var regexpaired = /\[[A-Z]{3,5}\]?\s?Device\s([0-9A-F]{1,2}[\.:-][0-9A-F]{1,2}[\.:-][0-9A-F]{1,2}[\.:-][0-9A-F]{1,2}[\.:-][0-9A-F]{1,2}[\.:-][0-9A-F]{1,2})\sPaired:\s([a-z]{2,3})/gm;
         var regextrusted = /\[[A-Z]{3,5}\]?\s?Device\s([0-9A-F]{1,2}[\.:-][0-9A-F]{1,2}[\.:-][0-9A-F]{1,2}[\.:-][0-9A-F]{1,2}[\.:-][0-9A-F]{1,2}[\.:-][0-9A-F]{1,2})\sTrusted:\s([a-z]{2,3})/gm;
         var regexblocked = /\[[A-Z]{3,5}\]?\s?Device\s([0-9A-F]{1,2}[\.:-][0-9A-F]{1,2}[\.:-][0-9A-F]{1,2}[\.:-][0-9A-F]{1,2}[\.:-][0-9A-F]{1,2}[\.:-][0-9A-F]{1,2})\sBlocked:\s([a-z]{2,3})/gm;
-	var regexpasskeyconfirmation = /\[agent\] Confirm passkey\s([0-9A-F]+)\s[^:]+:/gm;
+	    var regexpasskeyconfirmation = /\[agent\] Confirm passkey\s([0-9A-F]+)\s[^:]+:/gm;
+        var regexenterpin = /\[agent\] Enter PIN code:/gm; //
 
         var regexscanon1 = 'Discovery started';
         var regexscanon2 = 'Failed to start discovery: org.bluez.Error.InProgress';
@@ -173,6 +184,7 @@ exports.Bluetooth = function () {
         checkTrusted(regextrusted, data);
         checkBlocked(regexblocked, data);
         checkPasskeyConfirmation(regexpasskeyconfirmation, data);
+        checkEnterPIN(regexenterpin, data);
 
         if (data.indexOf(regexscanoff1) !== -1 || data.indexOf(regexscanoff2) !== -1)isScanning = false;
         if (data.indexOf(regexscanon1) !== -1 || data.indexOf(regexscanon2) !== -1 || data.indexOf(regexscanon3) !== -1)isScanning = true;
@@ -216,6 +228,18 @@ exports.Bluetooth = function () {
                     }
                 }
             }
+        }
+    }
+
+    function checkEnterPIN(regstr, data) {
+        var m;
+        while ((m = regstr.exec(data)) !== null) {
+            //m[1] - passkey
+	    //console.log("Confirm passkey : " + m[1]);
+            self.emit(bluetoothEvents.EnterPIN)
+	    // confirmPasskey(true);
+
+	    isWaitingForPIN = true;
         }
     }
 
@@ -425,6 +449,11 @@ exports.pair = function (macID) {
 exports.confirmPassKey = function (confirm) {
     this.isConfirmingPassKey = false;
     this.term.write(confirm ? 'yes\r' : 'no\r');
+}
+
+exports.enterPIN = function (pin) {
+    this.isWaitingForPIN = false;
+    this.term.write(pin + '\r');
 }
 
 exports.trust = function (macID) {
